@@ -10,8 +10,8 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                echo "Building Docker image for Spring Boot app..."
-                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                echo "Building Docker image..."
+                bat "docker build -t %IMAGE_NAME%:%IMAGE_TAG% ."
             }
         }
 
@@ -19,11 +19,11 @@ pipeline {
             steps {
                 echo "Logging into Docker Hub..."
                 withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-cred', // ton ID Jenkins pour Docker Hub
+                    credentialsId: 'dockerhub-cred',
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                    bat "echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin"
                 }
             }
         }
@@ -31,17 +31,8 @@ pipeline {
         stage('Docker Push') {
             steps {
                 echo "Pushing Docker image to Docker Hub..."
-                sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                bat "docker push %IMAGE_NAME%:%IMAGE_TAG%"
             }
-        }
-    }
-
-    post {
-        success {
-            echo "Pipeline completed successfully! Image pushed to Docker Hub."
-        }
-        failure {
-            echo "Pipeline failed. Check logs."
         }
     }
 }
