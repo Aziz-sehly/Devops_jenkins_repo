@@ -1,38 +1,93 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'M2_HOME'
+        jdk 'JAVA_HOME'
+    }
+
     environment {
-        IMAGE_NAME = "azizsehli/spring-app"
-        IMAGE_TAG  = "latest"
+        DOCKER_IMAGE = 'azizsehli/student-management'
+        DOCKER_REGISTRY = 'docker.io'
     }
 
     stages {
-
-        stage('Docker Build') {
+        stage('Checkout Git') {
             steps {
-                echo "Building Docker image..."
-                bat "docker build -t %IMAGE_NAME%:%IMAGE_TAG% ."
+                git branch: 'main',
+                        url: 'https://github.com/Aziz-sehly/Devops_jenkins_repo.git',
+                        credentialsId: 'github-aziz'
+            }
+        }
+
+        stage('Build Maven') {
+            steps {
+                sh 'mvn clean compile'
+            }
+        }
+
+        stage('Package JAR') {
+            steps {
+                sh 'mvn package -DskipTests'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    // ✅ SUPPRIMER sudo - utiliser docker directement
+                    sh "docker build -t ${DOCKER_IMAGE}:${env.BUILD_ID} ."
+                    sh "docker tag ${DOCKER_IMAGE}:${env.BUILD_ID} ${DOCKER_IMAGE}:latest"
+                }
             }
         }
 
         stage('Docker Login') {
             steps {
-                echo "Logging into Docker Hub..."
-                withCredentials([usernamePassword(
-                    credentialsId: 'Azizsehli',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    bat "echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin"
+                script {
+                    withCredentials([usernamePassword(
+                            credentialsId: 'Azizsehli',
+                            usernameVariable: 'DOCKER_USER',
+                            passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                            echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin
+                        """
+                    }
                 }
             }
         }
 
-        stage('Docker Push') {
+        stage('Push Docker Image') {
             steps {
-                echo "Pushing Docker image to Docker Hub..."
-                bat "docker push %IMAGE_NAME%:%IMAGE_TAG%"
+                script {
+                    sh """
+                        docker push ${DOCKER_IMAGE}:${env.BUILD_ID}
+                        docker push ${DOCKER_IMAGE}:latest
+                    """
+                }
             }
+        }
+
+        stage('Archive Artifacts') {
+            steps {
+                archiveArtifacts 'target/*.jar'
+            }
+        }
+    }
+
+    post {
+        always {
+            // ✅ SUPPRIMER sudo
+            sh 'docker system prune -f || true'
+            echo 'Pipeline terminée'
+        }
+        success {
+            echo '✅ Build Docker réussi!'
+            echo "Image: ${DOCKER_IMAGE}:${env.BUILD_ID}"
+        }
+        failure {
+            echo '❌ Build échoué!'
         }
     }
 }
